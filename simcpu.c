@@ -23,6 +23,7 @@
 #define SUCCESS 1
 #define FAILURE 0
 #define MAX_LEN 500
+#define MAX_CAPACITY 1000
 
 #define STATE_NEW 0
 #define STATE_READY 1
@@ -31,16 +32,17 @@
 #define STATE_TERMINATED 4
 
 // turnaround time is time finished executing - time of start //TODO HERE
+//TODO MAKE SURE THAT IF ARRIVAL TIME IS THE SAME, THERE IS A CONSISTENT WAY TO ORDER THEM (DEFINE ANOTHER WAY OF ORDERING THEM - MAYBE PROCESS #)
 
 /* --------------------------------- PROTOTYPES ---------------------------------*/
-
-void get_data();
-int set_flags(bool* d, bool *v, bool *r, int argc, char *argv[]);
 
 typedef struct thread_struct {
     int thread_num;
     int arrival_time;
-    int *burst_time[2];
+    int burst_num;
+    int process_num;
+    int *cpu_burst_times;
+    int *io_burst_times;
 } Thread;
 
 typedef struct heap_struct {
@@ -49,11 +51,14 @@ typedef struct heap_struct {
     int capacity;
 } PriorityQueue;
 
+void get_data(PriorityQueue *pq);
+int set_flags(bool* d, bool *v, bool *r, int argc, char *argv[]);
+
 PriorityQueue *CreateHeap(int capacity);
 void insert(PriorityQueue *h, Thread *key);
 void print(PriorityQueue *h);
-void heapify_bottom_top(PriorityQueue *h,int index);
-void heapify_top_bottom(PriorityQueue *h, int parent_node);
+void up_heap(PriorityQueue *h,int index);
+void down_heap(PriorityQueue *h, int parent_node);
 Thread* PopMin(PriorityQueue *h);
 
 /*-------------------------------------------------------------------------------*/
@@ -66,48 +71,21 @@ int main (int argc, char *argv[]) {
         exit(-1);
     }
 
-    bool *d_flag;
-    bool *v_flag;
-    bool *r_flag;
+    bool d_flag = false;
+    bool v_flag = false;
+    bool r_flag = false;
     int quantum = -1;
     char line[MAX_LEN];
+    int i, j;
 
-    PriorityQueue *pq = CreateHeap(10);
-    Thread t1;
-    t1.thread_num = 1;
-    t1.arrival_time = 20;
-    insert(pq, &t1);
-    t1.thread_num = 2;
-    t1.arrival_time = 10;
-    insert(pq, &t1);
-    t1.thread_num = 3;
-    t1.arrival_time = 30;
-    insert(pq, &t1);
-    t1.thread_num = 4;
-    t1.arrival_time = 5;
-    insert(pq, &t1);
-    print(pq);
+    PriorityQueue *pq = CreateHeap(MAX_CAPACITY);
 
-    printf("REMOVING\n\n");
-    Thread *popped = PopMin(pq);
-    printf("POPPED: Num: %d, Arrive: %d\n", popped->thread_num, popped->arrival_time);
-    free(popped);
-    popped = PopMin(pq);
-    printf("POPPED: Num: %d, Arrive: %d\n", popped->thread_num, popped->arrival_time);
-    free(popped);
-    popped = PopMin(pq);
-    printf("POPPED: Num: %d, Arrive: %d\n", popped->thread_num, popped->arrival_time);
-    free(popped);
-    popped = PopMin(pq);
-    printf("POPPED: Num: %d, Arrive: %d\n", popped->thread_num, popped->arrival_time);
-    free(popped);
-
-    exit(0);
-
-    set_flags(d_flag, v_flag, r_flag, argc, argv);
-    if (*r_flag == true && quantum <= 0) {
-        fprintf(stderr, "Usage: ./simcpu [-d] [-v] [-r quantum] < input_file\n");
-        exit(-1);
+    if (argc > 1) {
+        set_flags(&d_flag, &v_flag, &r_flag, argc, argv);
+        if (r_flag && quantum <= 0) {
+            fprintf(stderr, "Usage: ./simcpu [-d] [-v] [-r quantum] < input_file\n");
+            exit(-1);
+        }
     }
 
     // read input
@@ -121,9 +99,18 @@ int main (int argc, char *argv[]) {
         fprintf(stderr, "ERROR: Invalid first line in input\n");
         exit(-1);
     }
-    get_data(line);
+    get_data(pq);
 
-
+    for (i = 0; i < pq->count; i++) {
+        printf("PROCESS: %d, THREAD: %d, ARRIVAL: %d\n", pq->arr[i]->process_num, pq->arr[i]->thread_num, pq->arr[i]->arrival_time);
+        for (j = 0; j < pq->arr[i]->burst_num; j++) {
+            printf("\t\t|%d| CPU: %d", j + 1, pq->arr[i]->cpu_burst_times[j]);
+            if (j < pq->arr[i]->burst_num - 1) {
+                printf(", IO: %d", pq->arr[i]->io_burst_times[j]);
+            }
+            printf("\n");
+        }
+    }
 
     return 0;
 }
@@ -131,11 +118,37 @@ int main (int argc, char *argv[]) {
 /*--------------------------------- HELPER FUNCTIONS ---------------------------------*/
 
 // Gets the data from the input file (from stdin)
-void get_data(char *line) {
+void get_data(PriorityQueue *pq) {
+    char line[MAX_LEN];
+    fgets(line, MAX_LEN - 1, stdin);
     while (line != NULL) {
-        int num_threads;
-        fgets(line, MAX_LEN - 1, stdin);
-        sscanf(line, "%d %d %d");
+        int num_threads = 0, process_num = 0;
+        int i, j;
+        sscanf(line, "%d %d", &process_num, &num_threads);
+        for (i = 0; i < num_threads; i++) {
+            fgets(line, MAX_LEN - 1, stdin);
+            Thread temp;
+            temp.process_num = process_num;
+            sscanf(line, "%d %d %d", &(temp.thread_num), &(temp.arrival_time), &(temp.burst_num));
+            temp.cpu_burst_times = malloc(temp.burst_num * sizeof(int));
+            temp.io_burst_times = malloc((temp.burst_num - 1) * sizeof(int));
+            // get the bursts
+            for (j = 0; j < temp.burst_num; j++) { //
+                fgets(line, MAX_LEN - 1, stdin);
+                if (line == NULL) break;
+                int burst;
+                if (j < temp.burst_num - 1) {
+                    sscanf(line, "%d %d %d", &burst, &(temp.cpu_burst_times[j]), &(temp.io_burst_times[j]));
+                } else {
+                    sscanf(line, "%d %d", &burst, &(temp.cpu_burst_times[j]));
+                }
+            }
+            // add the Thread to the Priority Queue
+            insert(pq, &temp);
+            free(temp.cpu_burst_times);
+            free(temp.io_burst_times);
+        }
+        if ( (fgets(line, MAX_LEN - 1, stdin)) == NULL) break;
     }
 }
 
@@ -156,8 +169,15 @@ int set_flags(bool* d, bool *v, bool *r, int argc, char *argv[]) {
             } else return -1;
         }
     }
-
     return quantum;
+}
+
+void free_thread(Thread *t) {
+    if (t == NULL) return;
+    if (t->cpu_burst_times != NULL) free(t->cpu_burst_times);
+    if (t->io_burst_times != NULL) free(t->io_burst_times);
+    if (t != NULL) free(t);
+    t = NULL;
 }
 
 /* ---------------------------------- HEAP FUNCTIONS ---------------------------------- */
@@ -182,22 +202,33 @@ PriorityQueue *CreateHeap(int capacity){
     return h;
 }
 
-void insert(PriorityQueue *h, Thread *key){
-    if( h->count < h->capacity){
-        h->arr[h->count] = malloc(sizeof(Thread));
-        if (h->arr[h->count] == NULL) {
-            fprintf(stderr, "Malloc() failed for inserting Thread to Priority Queue.\n");
+void insert(PriorityQueue *pq, Thread *key){
+    int i;
+    if( pq->count < pq->capacity){
+        pq->arr[pq->count] = malloc(sizeof(Thread));
+        if (pq->arr[pq->count] == NULL) {
+            fprintf(stderr, "malloc() failed for inserting Thread to Priority Queue.\n");
             exit(-1);
         }
-        h->arr[h->count]->arrival_time = key->arrival_time;
-        h->arr[h->count]->thread_num = key->thread_num;
-        //h->arr[h->count]->burst_time[0] = key->burst_time[0]; //TODO UNCOMMENT
-        heapify_bottom_top(h, h->count);
-        h->count++;
+        pq->arr[pq->count]->arrival_time = key->arrival_time;
+        pq->arr[pq->count]->thread_num = key->thread_num;
+        pq->arr[pq->count]->burst_num = key->burst_num;
+        pq->arr[pq->count]->process_num = key->process_num;
+        pq->arr[pq->count]->cpu_burst_times = malloc(key->burst_num * sizeof(int));
+        pq->arr[pq->count]->io_burst_times = malloc((key->burst_num - 1) * sizeof(int));
+        
+        for (i = 0; i < key->burst_num; i++) {
+            pq->arr[pq->count]->cpu_burst_times[i] = key->cpu_burst_times[i];
+            if (i < key->burst_num - 1) {
+                pq->arr[pq->count]->io_burst_times[i] = key->io_burst_times[i];
+            }
+        }
+        up_heap(pq, pq->count);
+        pq->count++;
     }
 }
 
-void heapify_bottom_top(PriorityQueue *h,int index){
+void up_heap(PriorityQueue *h,int index){
     Thread *temp;
     int parent_node = (index-1)/2;
 
@@ -206,12 +237,19 @@ void heapify_bottom_top(PriorityQueue *h,int index){
         temp = h->arr[parent_node];
         h->arr[parent_node] = h->arr[index];
         h->arr[index] = temp;
-        heapify_bottom_top(h,parent_node);
+        up_heap(h,parent_node);
+    } else if (h->arr[parent_node]->arrival_time == h->arr[index]->arrival_time
+            && h->arr[parent_node]->process_num > h->arr[index]->process_num) { // compares by process number if arrival time is the same
+        //swap and recursive call
+        temp = h->arr[parent_node];
+        h->arr[parent_node] = h->arr[index];
+        h->arr[index] = temp;
+        up_heap(h,parent_node);
     }
 }
 
 // parent_node is the index of the parent node
-void heapify_top_bottom(PriorityQueue *h, int parent_node){
+void down_heap(PriorityQueue *h, int parent_node){
     int left = parent_node*2+1;
     int right = parent_node*2+2;
     int min;
@@ -235,7 +273,7 @@ void heapify_top_bottom(PriorityQueue *h, int parent_node){
         h->arr[parent_node] = temp;
 
         // recursive  call
-        heapify_top_bottom(h, min);
+        down_heap(h, min);
     }
 }
 
@@ -249,7 +287,7 @@ Thread* PopMin(PriorityQueue *h){
     pop = h->arr[0];
     h->arr[0] = h->arr[h->count-1];
     h->count--;
-    heapify_top_bottom(h, 0);
+    down_heap(h, 0);
     return pop;
 }
 
@@ -261,4 +299,4 @@ void print(PriorityQueue *h){
     }
     printf("->__/\\__\n");
 }
-/* -------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------------- */
