@@ -41,6 +41,9 @@ typedef struct thread_struct {
     int arrival_time;
     int burst_num;
     int process_num;
+    int turnaround_time;
+    int current_burst;
+    int time_enters_cpu;
     int *cpu_burst_times;
     int *io_burst_times;
 } Thread;
@@ -60,6 +63,7 @@ void print(PriorityQueue *h);
 void up_heap(PriorityQueue *h,int index);
 void down_heap(PriorityQueue *h, int parent_node);
 Thread* PopMin(PriorityQueue *h);
+void free_thread(Thread *t);
 
 /*-------------------------------------------------------------------------------*/
 
@@ -101,6 +105,7 @@ int main (int argc, char *argv[]) {
     }
     get_data(pq);
 
+    // PRINT ORIGINAL DATA FROM FILE
     for (i = 0; i < pq->count; i++) {
         printf("PROCESS: %d, THREAD: %d, ARRIVAL: %d\n", pq->arr[i]->process_num, pq->arr[i]->thread_num, pq->arr[i]->arrival_time);
         for (j = 0; j < pq->arr[i]->burst_num; j++) {
@@ -110,6 +115,53 @@ int main (int argc, char *argv[]) {
             }
             printf("\n");
         }
+    }
+    
+    int time_total = 0;
+    int cpu_time_total = 0;
+    int process_num = 0;
+    //int num_iterations = 0; //TODO REMOVE LATER
+
+    // loop while there are still threads in the ready queue
+    while (pq->count > 0) {
+        Thread *cur_thread = PopMin(pq);
+
+        printf("ARRIVAL TIME of PROCESS %d, THREAD %d, BURST %d : %d\n",  cur_thread->process_num,  cur_thread->thread_num, cur_thread->current_burst + 1, cur_thread->arrival_time);
+        
+        // not first time through
+        if (time_total != 0) {
+            
+            if (process_num == cur_thread->process_num) { // context switch - same process
+                time_total += units_same_switch;
+            } else { // context switch - different process
+                time_total += units_diff_switch;
+            }
+            // set time entering CPU for this thread
+            cur_thread->time_enters_cpu = time_total;
+        }
+        printf("\tTIME: %d\n", time_total);
+
+        // update total times
+        cpu_time_total += cur_thread->cpu_burst_times[cur_thread->current_burst];
+        time_total += cur_thread->cpu_burst_times[cur_thread->current_burst];
+
+        cur_thread->arrival_time = cur_thread->cpu_burst_times[cur_thread->current_burst]
+                + cur_thread->io_burst_times[cur_thread->current_burst] + cur_thread->time_enters_cpu;
+
+
+        process_num = cur_thread->process_num;
+        //TODO       I/O TIME NEEDS TO BE ADDRESSED?
+
+        cur_thread->current_burst++;
+        
+        // add thread back into queue unless it has finished
+        if (cur_thread->current_burst < cur_thread->burst_num) {   
+            insert(pq, cur_thread);
+        } else {
+            free_thread(cur_thread);
+        }
+
+        
     }
 
     return 0;
@@ -121,6 +173,7 @@ int main (int argc, char *argv[]) {
 void get_data(PriorityQueue *pq) {
     char line[MAX_LEN];
     fgets(line, MAX_LEN - 1, stdin);
+    // TODO CHANGE TO FOR LOOP USING NUM_PROCESSES FROM MAIN()??
     while (line != NULL) {
         int num_threads = 0, process_num = 0;
         int i, j;
@@ -131,7 +184,11 @@ void get_data(PriorityQueue *pq) {
             temp.process_num = process_num;
             sscanf(line, "%d %d %d", &(temp.thread_num), &(temp.arrival_time), &(temp.burst_num));
             temp.cpu_burst_times = malloc(temp.burst_num * sizeof(int));
-            temp.io_burst_times = malloc((temp.burst_num - 1) * sizeof(int));
+            temp.io_burst_times = malloc(temp.burst_num * sizeof(int));
+            //temp.time_burst_enters_ready = malloc(temp.burst_num & sizeof(int));  //TODO REMOVE LATER
+            temp.time_enters_cpu = 0;
+            temp.turnaround_time = 0;
+            temp.current_burst = 0;
             // get the bursts
             for (j = 0; j < temp.burst_num; j++) { //
                 fgets(line, MAX_LEN - 1, stdin);
@@ -141,6 +198,7 @@ void get_data(PriorityQueue *pq) {
                     sscanf(line, "%d %d %d", &burst, &(temp.cpu_burst_times[j]), &(temp.io_burst_times[j]));
                 } else {
                     sscanf(line, "%d %d", &burst, &(temp.cpu_burst_times[j]));
+                    temp.io_burst_times[j] = 0;
                 }
             }
             // add the Thread to the Priority Queue
@@ -214,6 +272,9 @@ void insert(PriorityQueue *pq, Thread *key){
         pq->arr[pq->count]->thread_num = key->thread_num;
         pq->arr[pq->count]->burst_num = key->burst_num;
         pq->arr[pq->count]->process_num = key->process_num;
+        pq->arr[pq->count]->current_burst = key->current_burst;
+        pq->arr[pq->count]->time_enters_cpu = key->time_enters_cpu;
+        pq->arr[pq->count]->turnaround_time = key->turnaround_time;
         pq->arr[pq->count]->cpu_burst_times = malloc(key->burst_num * sizeof(int));
         pq->arr[pq->count]->io_burst_times = malloc((key->burst_num - 1) * sizeof(int));
         
