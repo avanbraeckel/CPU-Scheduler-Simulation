@@ -25,11 +25,11 @@
 #define MAX_LEN 500
 #define MAX_CAPACITY 1000
 
-#define STATE_NEW 0
-#define STATE_READY 1
-#define STATE_RUNNING 2
-#define STATE_BLOCKED 3
-#define STATE_TERMINATED 4
+#define STATE_NEW "NEW"
+#define STATE_READY "READY"
+#define STATE_RUNNING "RUNNING"
+#define STATE_BLOCKED "BLOCKED"
+#define STATE_TERMINATED "TERMINATED"
 
 // turnaround time is time finished executing - time of start //TODO HERE
 //TODO MAKE SURE THAT IF ARRIVAL TIME IS THE SAME, THERE IS A CONSISTENT WAY TO ORDER THEM (DEFINE ANOTHER WAY OF ORDERING THEM - MAYBE PROCESS #)
@@ -38,12 +38,16 @@
 
 typedef struct thread_struct {
     int thread_num;
+    int num_threads;
     int arrival_time;
     int burst_num;
     int process_num;
-    int turnaround_time;
+    int original_arrival_time;
+    int time_finished;
     int current_burst;
     int time_enters_cpu;
+    int service_time;
+    int io_time;
     int *cpu_burst_times;
     int *io_burst_times;
 } Thread;
@@ -54,7 +58,7 @@ typedef struct heap_struct {
     int capacity;
 } PriorityQueue;
 
-void get_data(PriorityQueue *pq);
+int get_data(PriorityQueue *pq);
 int set_flags(bool* d, bool *v, bool *r, int argc, char *argv[]);
 
 PriorityQueue *CreateHeap(int capacity);
@@ -81,6 +85,7 @@ int main (int argc, char *argv[]) {
     int quantum = -1;
     char line[MAX_LEN];
     int i, j;
+    int total_num_threads;
 
     PriorityQueue *pq = CreateHeap(MAX_CAPACITY);
 
@@ -103,9 +108,10 @@ int main (int argc, char *argv[]) {
         fprintf(stderr, "ERROR: Invalid first line in input\n");
         exit(-1);
     }
-    get_data(pq);
+    total_num_threads = get_data(pq);
 
-    // PRINT ORIGINAL DATA FROM FILE
+    // TODO REMOVE LATER
+    // PRINT ORIGINAL DATA FROM FILE 
     for (i = 0; i < pq->count; i++) {
         printf("PROCESS: %d, THREAD: %d, ARRIVAL: %d\n", pq->arr[i]->process_num, pq->arr[i]->thread_num, pq->arr[i]->arrival_time);
         for (j = 0; j < pq->arr[i]->burst_num; j++) {
@@ -120,13 +126,15 @@ int main (int argc, char *argv[]) {
     int time_total = 0;
     int cpu_time_total = 0;
     int process_num = 0;
-    //int num_iterations = 0; //TODO REMOVE LATER
+    int turnaround_total = 0;
+    Thread *finished_threads[total_num_threads];
+    int thread_index = 0;
 
+// --------------------------------------- MAIN SIMULATION LOOP ---------------------------------------
     // loop while there are still threads in the ready queue
     while (pq->count > 0) {
         Thread *cur_thread = PopMin(pq);
 
-        printf("ARRIVAL TIME of PROCESS %d, THREAD %d, BURST %d : %d\n",  cur_thread->process_num,  cur_thread->thread_num, cur_thread->current_burst + 1, cur_thread->arrival_time);
         
         // not first time through
         if (time_total != 0) {
@@ -139,29 +147,110 @@ int main (int argc, char *argv[]) {
             // set time entering CPU for this thread
             cur_thread->time_enters_cpu = time_total;
         }
-        printf("\tTIME: %d\n", time_total);
+        // where time total matches "Time Enters CPU" 
+        //printf("\tTIME: %d\n", time_total); // TODO REMOVE DEBUG STATEMENT
+        
+        // Verbose Output for ready to running
+        if (v_flag == true) { 
+            printf("At time %d: Thread %d of Process %d moves from %s to %s\n", cur_thread->time_enters_cpu,
+                    cur_thread->thread_num, cur_thread->process_num, STATE_READY, STATE_RUNNING);
+        }
 
-        // update total times
+
+        // update total times and the arrival time
         cpu_time_total += cur_thread->cpu_burst_times[cur_thread->current_burst];
         time_total += cur_thread->cpu_burst_times[cur_thread->current_burst];
-
         cur_thread->arrival_time = cur_thread->cpu_burst_times[cur_thread->current_burst]
                 + cur_thread->io_burst_times[cur_thread->current_burst] + cur_thread->time_enters_cpu;
-
-
         process_num = cur_thread->process_num;
         //TODO       I/O TIME NEEDS TO BE ADDRESSED?
-
         cur_thread->current_burst++;
+
+        
         
         // add thread back into queue unless it has finished
         if (cur_thread->current_burst < cur_thread->burst_num) {   
             insert(pq, cur_thread);
-        } else {
-            free_thread(cur_thread);
-        }
 
-        
+            // Verbose Output for running to blocked and blocked to ready
+            if (v_flag == true) { 
+                // Verbose Output from running to blocked
+                printf("At time %d: Thread %d of Process %d moves from %s to %s\n", cur_thread->arrival_time - cur_thread->io_burst_times[cur_thread->current_burst - 1],
+                        cur_thread->thread_num, cur_thread->process_num, STATE_RUNNING, STATE_BLOCKED);
+                // Verbose Output for blocked to ready
+                printf("At time %d: Thread %d of Process %d moves from %s to %s\n", cur_thread->arrival_time,
+                        cur_thread->thread_num, cur_thread->process_num, STATE_BLOCKED, STATE_READY);
+            }
+        } else { // last burst finished
+            // get thread turnaround time
+            cur_thread->time_finished = time_total;
+            finished_threads[thread_index++] = cur_thread;
+
+            // Verbose Output for running to terminated
+            if (v_flag == true) { 
+                printf("At time %d: Thread %d of Process %d moves from %s to %s\n", time_total,
+                        cur_thread->thread_num, cur_thread->process_num, STATE_RUNNING, STATE_TERMINATED);
+            }
+        }
+    } // end while loop
+// --------------------------------------- END OF MAIN SIMULATION LOOP ---------------------------------------
+
+    // sort threads so they are in order for printing
+    for(i = 0; i < total_num_threads - 1; i++) {
+        for(j = i + 1; j < total_num_threads; j++) {
+            if(finished_threads[i]->process_num > finished_threads[j]->process_num) {
+                Thread *temp = finished_threads[i];
+                finished_threads[i] = finished_threads[j];
+                finished_threads[j] = temp;
+            } else if (finished_threads[i]->process_num == finished_threads[j]->process_num && finished_threads[i]->thread_num > finished_threads[j]->thread_num) {
+                Thread *temp = finished_threads[i];
+                finished_threads[i] = finished_threads[j];
+                finished_threads[j] = temp;
+            }
+        }
+    }
+
+    // get the turnaround time total for the processes
+    int current_process_num = finished_threads[0]->process_num;
+    int highest_time = finished_threads[0]->time_finished;
+    int lowest_arrival = finished_threads[0]->original_arrival_time;
+    for (i = 0; i < total_num_threads; i++) {
+        if (current_process_num == finished_threads[i]->process_num) {
+            if (finished_threads[i]->time_finished > highest_time) {
+                highest_time = finished_threads[i]->time_finished;
+            }
+            if (finished_threads[i]->original_arrival_time < lowest_arrival) {
+                lowest_arrival = finished_threads[i]->original_arrival_time;
+            } 
+        } else {
+            turnaround_total += highest_time - lowest_arrival; // add turnaround time of the process to the total
+            highest_time = finished_threads[i]->time_finished; // new process, so reset highest time and lowest arrival
+            lowest_arrival = finished_threads[i]->original_arrival_time;
+        }
+        current_process_num = finished_threads[i]->process_num;
+    }
+    // add turnaround time of last process
+    turnaround_total += highest_time - lowest_arrival;
+
+
+    // Default output
+    printf("Total Time Required = %d units\nAverage Turnaround Time is %.1f units\nCPU Utilization is %2.1f%%\n", time_total,
+            (double)turnaround_total / (double)num_processes, 100 * (double)cpu_time_total / (double)time_total);
+
+    // Detailed Mode output
+    if (d_flag == true) {
+        for (i = 0; i < total_num_threads; i++) {
+            // get service time and I/O time
+            printf("Thread %d of Process %d:\n  arrival time: %d\n  service time: %d units,"
+                    " I/O time: %d units, turnaround time: %d units, finish time: %d units\n", finished_threads[i]->thread_num, finished_threads[i]->process_num,
+                    finished_threads[i]->original_arrival_time, finished_threads[i]->service_time, finished_threads[i]->io_time,
+                    finished_threads[i]->time_finished - finished_threads[i]->original_arrival_time, finished_threads[i]->time_finished);
+        }
+    }
+
+    // free threads 
+    for (i = 0; i < total_num_threads; i++) {
+        free_thread(finished_threads[i]);
     }
 
     return 0;
@@ -169,36 +258,44 @@ int main (int argc, char *argv[]) {
 
 /*--------------------------------- HELPER FUNCTIONS ---------------------------------*/
 
-// Gets the data from the input file (from stdin)
-void get_data(PriorityQueue *pq) {
+// Gets the data from the input file (from stdin) and returns number of threads across all processes
+int get_data(PriorityQueue *pq) {
     char line[MAX_LEN];
+    int total_threads = 0;
     fgets(line, MAX_LEN - 1, stdin);
     // TODO CHANGE TO FOR LOOP USING NUM_PROCESSES FROM MAIN()??
     while (line != NULL) {
         int num_threads = 0, process_num = 0;
         int i, j;
         sscanf(line, "%d %d", &process_num, &num_threads);
+        total_threads += num_threads;
         for (i = 0; i < num_threads; i++) {
             fgets(line, MAX_LEN - 1, stdin);
             Thread temp;
             temp.process_num = process_num;
+            temp.num_threads = num_threads;
             sscanf(line, "%d %d %d", &(temp.thread_num), &(temp.arrival_time), &(temp.burst_num));
             temp.cpu_burst_times = malloc(temp.burst_num * sizeof(int));
             temp.io_burst_times = malloc(temp.burst_num * sizeof(int));
             //temp.time_burst_enters_ready = malloc(temp.burst_num & sizeof(int));  //TODO REMOVE LATER
             temp.time_enters_cpu = 0;
-            temp.turnaround_time = 0;
+            temp.time_finished = 0;
             temp.current_burst = 0;
+            temp.original_arrival_time = temp.arrival_time;
+            temp.service_time = 0;
+            temp.io_time = 0;
             // get the bursts
-            for (j = 0; j < temp.burst_num; j++) { //
-                fgets(line, MAX_LEN - 1, stdin);
-                if (line == NULL) break;
+            for (j = 0; j < temp.burst_num; j++) {
+                if ( (fgets(line, MAX_LEN - 1, stdin)) == NULL || line == NULL) break;
                 int burst;
                 if (j < temp.burst_num - 1) {
                     sscanf(line, "%d %d %d", &burst, &(temp.cpu_burst_times[j]), &(temp.io_burst_times[j]));
+                    temp.service_time += temp.cpu_burst_times[j];
+                    temp.io_time += temp.io_burst_times[j];
                 } else {
                     sscanf(line, "%d %d", &burst, &(temp.cpu_burst_times[j]));
                     temp.io_burst_times[j] = 0;
+                    temp.service_time += temp.cpu_burst_times[j];
                 }
             }
             // add the Thread to the Priority Queue
@@ -208,6 +305,7 @@ void get_data(PriorityQueue *pq) {
         }
         if ( (fgets(line, MAX_LEN - 1, stdin)) == NULL) break;
     }
+    return total_threads;
 }
 
 // returns the quantum and sets the flags to true if they exist
@@ -269,14 +367,18 @@ void insert(PriorityQueue *pq, Thread *key){
             exit(-1);
         }
         pq->arr[pq->count]->arrival_time = key->arrival_time;
+        pq->arr[pq->count]->original_arrival_time = key->original_arrival_time;
         pq->arr[pq->count]->thread_num = key->thread_num;
         pq->arr[pq->count]->burst_num = key->burst_num;
         pq->arr[pq->count]->process_num = key->process_num;
         pq->arr[pq->count]->current_burst = key->current_burst;
         pq->arr[pq->count]->time_enters_cpu = key->time_enters_cpu;
-        pq->arr[pq->count]->turnaround_time = key->turnaround_time;
+        pq->arr[pq->count]->time_finished = key->time_finished;
+        pq->arr[pq->count]->num_threads = key->num_threads;
         pq->arr[pq->count]->cpu_burst_times = malloc(key->burst_num * sizeof(int));
         pq->arr[pq->count]->io_burst_times = malloc((key->burst_num - 1) * sizeof(int));
+        pq->arr[pq->count]->io_time = key->io_time;
+        pq->arr[pq->count]->service_time = key->service_time;
         
         for (i = 0; i < key->burst_num; i++) {
             pq->arr[pq->count]->cpu_burst_times[i] = key->cpu_burst_times[i];
