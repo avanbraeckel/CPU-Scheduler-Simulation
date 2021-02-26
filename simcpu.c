@@ -90,11 +90,20 @@ int main (int argc, char *argv[]) {
     PriorityQueue *pq = CreateHeap(MAX_CAPACITY);
 
     if (argc > 1) {
-        set_flags(&d_flag, &v_flag, &r_flag, argc, argv);
+        quantum = set_flags(&d_flag, &v_flag, &r_flag, argc, argv);
         if (r_flag && quantum <= 0) {
             fprintf(stderr, "Usage: ./simcpu [-d] [-v] [-r quantum] < input_file\n");
             exit(-1);
         }
+    } else {
+        fprintf(stderr, "Usage: ./simcpu [-d] [-v] [-r quantum] < input_file\n");
+        exit(-1);
+    }
+
+    if (r_flag == true) {
+        printf("Round Robin Scheduling (quantum = %d time units)\n", quantum);
+    } else {
+        printf("FCFS Scheduling\n");
     }
 
     // read input
@@ -135,6 +144,11 @@ int main (int argc, char *argv[]) {
     while (pq->count > 0) {
         Thread *cur_thread = PopMin(pq);
 
+        // Verbose Output for ready to running
+        if (v_flag == true && cur_thread->arrival_time == cur_thread->original_arrival_time) { 
+            printf("At time %d: Thread %d of Process %d moves from %s to %s\n", cur_thread->arrival_time,
+                    cur_thread->thread_num, cur_thread->process_num, STATE_NEW, STATE_READY);
+        }
         
         // not first time through
         if (time_total != 0) {
