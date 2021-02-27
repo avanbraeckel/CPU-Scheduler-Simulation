@@ -37,9 +37,6 @@
 #define BLOCKED_NUM 3
 #define TERMINATED_NUM 4
 
-// turnaround time is time finished executing - time of start //TODO HERE
-//TODO MAKE SURE THAT IF ARRIVAL TIME IS THE SAME, THERE IS A CONSISTENT WAY TO ORDER THEM (DEFINE ANOTHER WAY OF ORDERING THEM - MAYBE PROCESS #)
-
 /* --------------------------------- PROTOTYPES ---------------------------------*/
 
 typedef struct thread_struct {
@@ -58,7 +55,6 @@ typedef struct thread_struct {
     int *io_burst_times;
 } Thread;
 
-//TODO MAKE ANOTHER STRUCT SO YOU CAN SORT THE VERBOSE STATEMENTS BEFORE PRINTING?
 typedef struct verbose_struct {
     int time;
     int thread_num;
@@ -84,9 +80,7 @@ void down_heap(PriorityQueue *h, int parent_node);
 Thread* PopMin(PriorityQueue *h);
 void free_thread(Thread *t);
 
-/*-------------------------------------------------------------------------------*/
-
-/* ----------------- MAIN ----------------- */
+/* --------------------------------------- MAIN --------------------------------------- */
 int main (int argc, char *argv[]) {
     char *states[] = {STATE_NEW, STATE_READY, STATE_RUNNING, STATE_BLOCKED, STATE_TERMINATED};
     if (argc > 5) { // invalid number of arguments
@@ -132,7 +126,7 @@ int main (int argc, char *argv[]) {
     total_num_threads = get_data(pq);
 
     if (quantum <= 0) quantum = 1;
-    VerboseLine verbose_output[MAX_CAPACITY * total_num_threads * quantum];
+    VerboseLine verbose_output[MAX_CAPACITY / 2 * total_num_threads * quantum];
     
     int time_total = 0;
     int cpu_time_total = 0;
@@ -179,7 +173,6 @@ int main (int argc, char *argv[]) {
             last_burst_num = cur_thread->current_burst - 1;
         }
         // where time total matches "Time Enters CPU" 
-        //printf("\tTIME: %d\n", time_total); // TODO REMOVE DEBUG STATEMENT
         
         // Verbose Output for ready to running
         if (v_flag == true) { 
@@ -192,12 +185,8 @@ int main (int argc, char *argv[]) {
             verbose_output[verbose_counter++] = new_verbose;
         }
 
-
         // update total times and the arrival time, as well as increment the current burst of the thread
         if (r_flag == true) { // Round Robin calculations
-        //if (cur_thread->arrival_time > time_total) time_total = cur_thread->arrival_time; //TODO REMOVE LATER?? MAKES IT WORK?
-        // printf("PROCESS %d THREAD %d BURST %d ARRIVES AT %d\n", cur_thread->process_num, cur_thread->thread_num, cur_thread->current_burst + 1, cur_thread->arrival_time);
-        // printf("\tSETTING TIME ENTER CPU :   %d\n", time_total);
             int remaining_time = cur_thread->cpu_burst_times[cur_thread->current_burst] - quantum;
             if (remaining_time <= 0) { // burst finished
                 remaining_time = 0; // reset to 0
@@ -251,12 +240,13 @@ int main (int argc, char *argv[]) {
                     VerboseLine new_verbose;
                     new_verbose.process_num = cur_thread->process_num;
                     new_verbose.thread_num = cur_thread->thread_num;
-                    new_verbose.time = cur_thread->arrival_time - cur_thread->io_burst_times[cur_thread->current_burst - 1];
+                    new_verbose.time = cur_thread->arrival_time;
                     new_verbose.state1 = RUNNING_NUM;
                     new_verbose.state2 = READY_NUM;
                     verbose_output[verbose_counter++] = new_verbose;
                 }
             }
+            free_thread(cur_thread);
         } else { // last burst finished
             // get thread turnaround time
             cur_thread->time_finished = time_total;
@@ -359,6 +349,9 @@ int main (int argc, char *argv[]) {
     for (i = 0; i < total_num_threads; i++) {
         free_thread(finished_threads[i]);
     }
+
+    if (pq != NULL && pq->arr != NULL) free(pq->arr);
+    if (pq != NULL) free(pq);
 
     return 0;
 }
@@ -483,7 +476,7 @@ void insert(PriorityQueue *pq, Thread *key){
         pq->arr[pq->count]->time_finished = key->time_finished;
         pq->arr[pq->count]->num_threads = key->num_threads;
         pq->arr[pq->count]->cpu_burst_times = malloc(key->burst_num * sizeof(int));
-        pq->arr[pq->count]->io_burst_times = malloc((key->burst_num - 1) * sizeof(int));
+        pq->arr[pq->count]->io_burst_times = malloc(key->burst_num * sizeof(int));
         pq->arr[pq->count]->io_time = key->io_time;
         pq->arr[pq->count]->service_time = key->service_time;
         
@@ -520,8 +513,8 @@ void up_heap(PriorityQueue *h,int index){
 
 // parent_node is the index of the parent node
 void down_heap(PriorityQueue *h, int parent_node){
-    int left = parent_node*2+1;
-    int right = parent_node*2+2;
+    int left = parent_node * 2 + 1;
+    int right = parent_node * 2 + 2;
     int min;
     Thread *temp;
 
@@ -560,13 +553,3 @@ Thread* PopMin(PriorityQueue *h){
     down_heap(h, 0);
     return pop;
 }
-
-void print(PriorityQueue *h){
-    int i;
-    printf("____________Print Heap_____________\n");
-    for(i=0;i< h->count;i++){
-        printf("-> THREAD: %d, ARRIVE: %d, BURST: N/A\n", h->arr[i]->thread_num, h->arr[i]->arrival_time); //TODO ADD BURST
-    }
-    printf("->__/\\__\n");
-}
-/* -------------------------------------------------------------------------------- */
