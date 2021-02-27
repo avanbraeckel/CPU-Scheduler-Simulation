@@ -52,6 +52,8 @@ typedef struct thread_struct {
     int *io_burst_times;
 } Thread;
 
+//TODO MAKE ANOTHER STRUCT SO YOU CAN SORT THE VERBOSE STATEMENTS BEFORE PRINTING?
+
 typedef struct heap_struct {
     Thread **arr;
     int count;
@@ -95,9 +97,6 @@ int main (int argc, char *argv[]) {
             fprintf(stderr, "Usage: ./simcpu [-d] [-v] [-r quantum] < input_file\n");
             exit(-1);
         }
-    } else {
-        fprintf(stderr, "Usage: ./simcpu [-d] [-v] [-r quantum] < input_file\n");
-        exit(-1);
     }
 
     if (r_flag == true) {
@@ -120,17 +119,17 @@ int main (int argc, char *argv[]) {
     total_num_threads = get_data(pq);
 
     // TODO REMOVE LATER
-    // PRINT ORIGINAL DATA FROM FILE 
-    for (i = 0; i < pq->count; i++) {
-        printf("PROCESS: %d, THREAD: %d, ARRIVAL: %d\n", pq->arr[i]->process_num, pq->arr[i]->thread_num, pq->arr[i]->arrival_time);
-        for (j = 0; j < pq->arr[i]->burst_num; j++) {
-            printf("\t\t|%d| CPU: %d", j + 1, pq->arr[i]->cpu_burst_times[j]);
-            if (j < pq->arr[i]->burst_num - 1) {
-                printf(", IO: %d", pq->arr[i]->io_burst_times[j]);
-            }
-            printf("\n");
-        }
-    }
+    // // PRINT ORIGINAL DATA FROM FILE 
+    // for (i = 0; i < pq->count; i++) {
+    //     printf("PROCESS: %d, THREAD: %d, ARRIVAL: %d\n", pq->arr[i]->process_num, pq->arr[i]->thread_num, pq->arr[i]->arrival_time);
+    //     for (j = 0; j < pq->arr[i]->burst_num; j++) {
+    //         printf("\t\t|%d| CPU: %d", j + 1, pq->arr[i]->cpu_burst_times[j]);
+    //         if (j < pq->arr[i]->burst_num - 1) {
+    //             printf(", IO: %d", pq->arr[i]->io_burst_times[j]);
+    //         }
+    //         printf("\n");
+    //     }
+    // }
     
     int time_total = 0;
     int cpu_time_total = 0;
@@ -138,6 +137,8 @@ int main (int argc, char *argv[]) {
     int turnaround_total = 0;
     Thread *finished_threads[total_num_threads];
     int thread_index = 0;
+    int thread_num = 0;
+    int last_burst_num = 0;
 
 // --------------------------------------- MAIN SIMULATION LOOP ---------------------------------------
     // loop while there are still threads in the ready queue
@@ -152,35 +153,57 @@ int main (int argc, char *argv[]) {
         
         // not first time through
         if (time_total != 0) {
-            
             if (process_num == cur_thread->process_num) { // context switch - same process
-                time_total += units_same_switch;
+                if (thread_num != cur_thread->thread_num) { // different thread number
+                    time_total += units_same_switch;
+                } else if (last_burst_num != cur_thread->current_burst - 1) { // same thread number AND last burst isn't the same
+                    time_total += cur_thread->io_burst_times[cur_thread->current_burst - 1];
+                }
             } else { // context switch - different process
                 time_total += units_diff_switch;
             }
             // set time entering CPU for this thread
             cur_thread->time_enters_cpu = time_total;
+            last_burst_num = cur_thread->current_burst - 1;
         }
         // where time total matches "Time Enters CPU" 
         //printf("\tTIME: %d\n", time_total); // TODO REMOVE DEBUG STATEMENT
         
         // Verbose Output for ready to running
         if (v_flag == true) { 
-            printf("At time %d: Thread %d of Process %d moves from %s to %s\n", cur_thread->time_enters_cpu,
+            printf("At time %d: Thread %d of Process %d moves from %s to %s\n", time_total,
                     cur_thread->thread_num, cur_thread->process_num, STATE_READY, STATE_RUNNING);
         }
 
 
-        // update total times and the arrival time
-        cpu_time_total += cur_thread->cpu_burst_times[cur_thread->current_burst];
-        time_total += cur_thread->cpu_burst_times[cur_thread->current_burst];
-        cur_thread->arrival_time = cur_thread->cpu_burst_times[cur_thread->current_burst]
-                + cur_thread->io_burst_times[cur_thread->current_burst] + cur_thread->time_enters_cpu;
+        // update total times and the arrival time, as well as increment the current burst of the thread
+        if (r_flag == true) { // Round Robin calculations
+        //if (cur_thread->arrival_time > time_total) time_total = cur_thread->arrival_time; //TODO REMOVE LATER?? MAKES IT WORK?
+        // printf("PROCESS %d THREAD %d BURST %d ARRIVES AT %d\n", cur_thread->process_num, cur_thread->thread_num, cur_thread->current_burst + 1, cur_thread->arrival_time);
+        // printf("\tSETTING TIME ENTER CPU :   %d\n", time_total);
+            int remaining_time = cur_thread->cpu_burst_times[cur_thread->current_burst] - quantum;
+            if (remaining_time <= 0) { // burst finished
+                remaining_time = 0; // reset to 0
+                cpu_time_total += cur_thread->cpu_burst_times[cur_thread->current_burst];
+                time_total += cur_thread->cpu_burst_times[cur_thread->current_burst];
+                cur_thread->arrival_time = cur_thread->cpu_burst_times[cur_thread->current_burst] + 
+                        cur_thread->io_burst_times[cur_thread->current_burst] + cur_thread->time_enters_cpu;
+                cur_thread->current_burst++;
+            } else { // otherwise burst didn't finish
+                cpu_time_total += quantum;
+                time_total += quantum;
+                cur_thread->cpu_burst_times[cur_thread->current_burst] = remaining_time;
+                cur_thread->arrival_time = quantum + cur_thread->time_enters_cpu;
+            }
+        } else { // FCFS calculations
+            cpu_time_total += cur_thread->cpu_burst_times[cur_thread->current_burst];
+            time_total += cur_thread->cpu_burst_times[cur_thread->current_burst];
+            cur_thread->arrival_time = cur_thread->cpu_burst_times[cur_thread->current_burst]
+                    + cur_thread->io_burst_times[cur_thread->current_burst] + cur_thread->time_enters_cpu;
+            cur_thread->current_burst++;
+        }
         process_num = cur_thread->process_num;
-        //TODO       I/O TIME NEEDS TO BE ADDRESSED?
-        cur_thread->current_burst++;
-
-        
+        thread_num = cur_thread->thread_num;
         
         // add thread back into queue unless it has finished
         if (cur_thread->current_burst < cur_thread->burst_num) {   
@@ -208,7 +231,6 @@ int main (int argc, char *argv[]) {
         }
     } // end while loop
 // --------------------------------------- END OF MAIN SIMULATION LOOP ---------------------------------------
-
     // sort threads so they are in order for printing
     for(i = 0; i < total_num_threads - 1; i++) {
         for(j = i + 1; j < total_num_threads; j++) {
