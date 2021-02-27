@@ -130,7 +130,9 @@ int main (int argc, char *argv[]) {
         exit(-1);
     }
     total_num_threads = get_data(pq);
-    VerboseLine *verbose_output = malloc(MAX_CAPACITY * total_num_threads);
+
+    if (quantum <= 0) quantum = 1;
+    VerboseLine verbose_output[MAX_CAPACITY * total_num_threads * quantum];
     
     int time_total = 0;
     int cpu_time_total = 0;
@@ -300,11 +302,6 @@ int main (int argc, char *argv[]) {
                     verbose_output[j] = temp;
                 } else if (verbose_output[i].time == verbose_output[j].time && (verbose_output[i].state1 == NEW_NUM || verbose_output[j].state1 == NEW_NUM)
                         && verbose_output[i].state1 > verbose_output[j].state1) {
-                    VerboseLine temp = verbose_output[i];
-                    verbose_output[i] = verbose_output[j];
-                    verbose_output[j] = temp;
-                } else if (verbose_output[i].time == verbose_output[j].time && verbose_output[i].process_num == verbose_output[j].process_num
-                        && verbose_output[i].thread_num > verbose_output[j].thread_num) {
                     VerboseLine temp = verbose_output[i];
                     verbose_output[i] = verbose_output[j];
                     verbose_output[j] = temp;
