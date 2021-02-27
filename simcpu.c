@@ -126,8 +126,7 @@ int main (int argc, char *argv[]) {
     total_num_threads = get_data(pq);
 
     if (quantum <= 0) quantum = 1;
-    VerboseLine verbose_output[MAX_CAPACITY / 2 * total_num_threads * quantum];
-    
+    VerboseLine verbose_output[MAX_CAPACITY * 3 / 2 * total_num_threads * quantum];
     int time_total = 0;
     int cpu_time_total = 0;
     int process_num = 0;
