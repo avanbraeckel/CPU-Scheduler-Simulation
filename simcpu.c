@@ -326,6 +326,14 @@ int main (int argc, char *argv[]) {
         for (i = 0; i < verbose_counter; i++) {
             printf("At time %d: Thread %d of Process %d moves from %s to %s\n", verbose_output[i].time,
                     verbose_output[i].thread_num, verbose_output[i].process_num, states[verbose_output[i].state1], states[verbose_output[i].state2]);
+            for (j = 0; j < total_num_threads; j++) {
+                if (verbose_output[i].state2 == TERMINATED_NUM && verbose_output[i].process_num == finished_threads[j]->process_num 
+                        && verbose_output[i].thread_num == finished_threads[j]->thread_num)
+                    printf("Thread %d of Process %d:\n  arrival time: %d\n  service time: %d units,"
+                        " I/O time: %d units, turnaround time: %d units, finish time: %d units\n", finished_threads[j]->thread_num, finished_threads[j]->process_num,
+                        finished_threads[j]->original_arrival_time, finished_threads[j]->service_time, finished_threads[j]->io_time,
+                        finished_threads[j]->time_finished - finished_threads[j]->original_arrival_time, finished_threads[j]->time_finished);
+            }   
         }
     }
 
@@ -348,7 +356,7 @@ int main (int argc, char *argv[]) {
     for (i = 0; i < total_num_threads; i++) {
         free_thread(finished_threads[i]);
     }
-
+    // free priority queue
     if (pq != NULL && pq->arr != NULL) free(pq->arr);
     if (pq != NULL) free(pq);
 
