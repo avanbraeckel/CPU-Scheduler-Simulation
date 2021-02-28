@@ -234,7 +234,7 @@ int main (int argc, char *argv[]) {
                     new_verbose2.state1 = BLOCKED_NUM;
                     new_verbose2.state2 = READY_NUM;
                     verbose_output[verbose_counter++] = new_verbose2;
-                } else { // didn't finish CPU burst //TODO IS RUNNING TO READY RIGHT FOR THIS?
+                } else { // didn't finish CPU burst
                     // Verbose Output from running to ready
                     VerboseLine new_verbose;
                     new_verbose.process_num = cur_thread->process_num;
@@ -362,7 +362,6 @@ int get_data(PriorityQueue *pq) {
     char line[MAX_LEN];
     int total_threads = 0;
     fgets(line, MAX_LEN - 1, stdin);
-    // TODO CHANGE TO FOR LOOP USING NUM_PROCESSES FROM MAIN()??
     while (line != NULL) {
         int num_threads = 0, process_num = 0;
         int i, j;
@@ -370,13 +369,13 @@ int get_data(PriorityQueue *pq) {
         total_threads += num_threads;
         for (i = 0; i < num_threads; i++) {
             fgets(line, MAX_LEN - 1, stdin);
+            // store the info in a Thread
             Thread temp;
             temp.process_num = process_num;
             temp.num_threads = num_threads;
             sscanf(line, "%d %d %d", &(temp.thread_num), &(temp.arrival_time), &(temp.burst_num));
             temp.cpu_burst_times = malloc(temp.burst_num * sizeof(int));
             temp.io_burst_times = malloc(temp.burst_num * sizeof(int));
-            //temp.time_burst_enters_ready = malloc(temp.burst_num & sizeof(int));  //TODO REMOVE LATER
             temp.time_enters_cpu = 0;
             temp.time_finished = 0;
             temp.current_burst = 0;
@@ -465,6 +464,7 @@ void insert(PriorityQueue *pq, Thread *key){
             fprintf(stderr, "malloc() failed for inserting Thread to Priority Queue.\n");
             exit(-1);
         }
+        // copy all data
         pq->arr[pq->count]->arrival_time = key->arrival_time;
         pq->arr[pq->count]->original_arrival_time = key->original_arrival_time;
         pq->arr[pq->count]->thread_num = key->thread_num;
@@ -478,8 +478,7 @@ void insert(PriorityQueue *pq, Thread *key){
         pq->arr[pq->count]->io_burst_times = malloc(key->burst_num * sizeof(int));
         pq->arr[pq->count]->io_time = key->io_time;
         pq->arr[pq->count]->service_time = key->service_time;
-        
-        for (i = 0; i < key->burst_num; i++) {
+        for (i = 0; i < key->burst_num; i++) { // copy burst times
             pq->arr[pq->count]->cpu_burst_times[i] = key->cpu_burst_times[i];
             if (i < key->burst_num - 1) {
                 pq->arr[pq->count]->io_burst_times[i] = key->io_burst_times[i];
@@ -522,8 +521,8 @@ void down_heap(PriorityQueue *h, int parent_node){
     if(right >= h->count || right <0)
         right = -1;
 
-    if(left != -1 && h->arr[left]->arrival_time < h->arr[parent_node]->arrival_time)
-        min=left;
+    if(left != -1 && h->arr[left]->arrival_time < h->arr[parent_node]->arrival_time) // sort by arrival time
+        min = left;
     else
         min = parent_node;
     if(right != -1 && h->arr[right]->arrival_time < h->arr[min]->arrival_time)
@@ -541,8 +540,7 @@ void down_heap(PriorityQueue *h, int parent_node){
 
 Thread* PopMin(PriorityQueue *h){
     Thread* pop;
-    if(h->count == 0){
-        printf("\n__Heap is Empty__\n");
+    if(h == NULL || h->arr == NULL || h->count == 0){ // return NULL if empty or invalid
         return NULL;
     }
     // replace first node by last and delete last
