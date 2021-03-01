@@ -136,14 +136,11 @@ int main (int argc, char *argv[]) {
     int thread_num = 0;
     int last_burst_num = 0;
     int verbose_counter = 0;
-    bool finished_burst = true;
 
 // --------------------------------------- MAIN SIMULATION LOOP ---------------------------------------
     // loop while there are still threads in the ready queue
     while (pq->count > 0) {
         Thread *cur_thread = PopMin(pq);
-
-        finished_burst = true; // default true
 
         // Verbose Output for new to ready
         if (v_flag == true && cur_thread->arrival_time == cur_thread->original_arrival_time) { 
@@ -199,7 +196,6 @@ int main (int argc, char *argv[]) {
                 time_total += quantum;
                 cur_thread->cpu_burst_times[cur_thread->current_burst] = remaining_time;
                 cur_thread->arrival_time = quantum + cur_thread->time_enters_cpu;
-                finished_burst = false;
             }
         } else { // FCFS calculations
             cpu_time_total += cur_thread->cpu_burst_times[cur_thread->current_burst];
@@ -217,33 +213,22 @@ int main (int argc, char *argv[]) {
 
             // Verbose Output for running to blocked and blocked to ready
             if (v_flag == true) { 
-                if (finished_burst) {
-                    // Verbose Output from running to blocked
-                    VerboseLine new_verbose;
-                    new_verbose.process_num = cur_thread->process_num;
-                    new_verbose.thread_num = cur_thread->thread_num;
-                    new_verbose.time = cur_thread->arrival_time - cur_thread->io_burst_times[cur_thread->current_burst - 1];
-                    new_verbose.state1 = RUNNING_NUM;
-                    new_verbose.state2 = BLOCKED_NUM;
-                    verbose_output[verbose_counter++] = new_verbose;
-                    // Verbose Output for blocked to ready
-                    VerboseLine new_verbose2;
-                    new_verbose2.process_num = cur_thread->process_num;
-                    new_verbose2.thread_num = cur_thread->thread_num;
-                    new_verbose2.time = cur_thread->arrival_time;
-                    new_verbose2.state1 = BLOCKED_NUM;
-                    new_verbose2.state2 = READY_NUM;
-                    verbose_output[verbose_counter++] = new_verbose2;
-                } else { // didn't finish CPU burst
-                    // Verbose Output from running to ready
-                    VerboseLine new_verbose;
-                    new_verbose.process_num = cur_thread->process_num;
-                    new_verbose.thread_num = cur_thread->thread_num;
-                    new_verbose.time = cur_thread->arrival_time;
-                    new_verbose.state1 = RUNNING_NUM;
-                    new_verbose.state2 = READY_NUM;
-                    verbose_output[verbose_counter++] = new_verbose;
-                }
+                // Verbose Output from running to blocked
+                VerboseLine new_verbose;
+                new_verbose.process_num = cur_thread->process_num;
+                new_verbose.thread_num = cur_thread->thread_num;
+                new_verbose.time = cur_thread->arrival_time - cur_thread->io_burst_times[cur_thread->current_burst - 1];
+                new_verbose.state1 = RUNNING_NUM;
+                new_verbose.state2 = BLOCKED_NUM;
+                verbose_output[verbose_counter++] = new_verbose;
+                // Verbose Output for blocked to ready
+                VerboseLine new_verbose2;
+                new_verbose2.process_num = cur_thread->process_num;
+                new_verbose2.thread_num = cur_thread->thread_num;
+                new_verbose2.time = cur_thread->arrival_time;
+                new_verbose2.state1 = BLOCKED_NUM;
+                new_verbose2.state2 = READY_NUM;
+                verbose_output[verbose_counter++] = new_verbose2;
             }
             free_thread(cur_thread);
         } else { // last burst finished
@@ -326,14 +311,6 @@ int main (int argc, char *argv[]) {
         for (i = 0; i < verbose_counter; i++) {
             printf("At time %d: Thread %d of Process %d moves from %s to %s\n", verbose_output[i].time,
                     verbose_output[i].thread_num, verbose_output[i].process_num, states[verbose_output[i].state1], states[verbose_output[i].state2]);
-            for (j = 0; j < total_num_threads; j++) {
-                if (verbose_output[i].state2 == TERMINATED_NUM && verbose_output[i].process_num == finished_threads[j]->process_num 
-                        && verbose_output[i].thread_num == finished_threads[j]->thread_num)
-                    printf("Thread %d of Process %d:\n  arrival time: %d\n  service time: %d units,"
-                        " I/O time: %d units, turnaround time: %d units, finish time: %d units\n", finished_threads[j]->thread_num, finished_threads[j]->process_num,
-                        finished_threads[j]->original_arrival_time, finished_threads[j]->service_time, finished_threads[j]->io_time,
-                        finished_threads[j]->time_finished - finished_threads[j]->original_arrival_time, finished_threads[j]->time_finished);
-            }   
         }
     }
 
@@ -342,7 +319,7 @@ int main (int argc, char *argv[]) {
             (double)turnaround_total / (double)num_processes, 100 * (double)cpu_time_total / (double)time_total);
 
     // Detailed Mode output
-    if (d_flag == true) {
+    if (d_flag == true || v_flag == true) {
         for (i = 0; i < total_num_threads; i++) {
             // get service time and I/O time
             printf("Thread %d of Process %d:\n  arrival time: %d\n  service time: %d units,"
