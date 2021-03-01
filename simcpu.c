@@ -252,7 +252,7 @@ int main (int argc, char *argv[]) {
 
     } // end while loop
 // --------------------------------------- END OF MAIN SIMULATION LOOP ---------------------------------------
-    // sort threads so they are in order for printing
+    // sort threads so they are in order for printing (easier to read)
     for(i = 0; i < total_num_threads - 1; i++) {
         for(j = i + 1; j < total_num_threads; j++) {
             if(finished_threads[i]->process_num > finished_threads[j]->process_num) {
@@ -266,7 +266,7 @@ int main (int argc, char *argv[]) {
             }
         }
     }
-    // sort verbose lines so they are in order for printing
+    // sort verbose lines so they are in order for printing (easier to read)
     if (v_flag == true) {
         for(i = 0; i < verbose_counter - 1; i++) {
             for(j = i + 1; j < verbose_counter; j++) {
@@ -318,7 +318,7 @@ int main (int argc, char *argv[]) {
     printf("Total Time Required = %d units\nAverage Turnaround Time is %.1f units\nCPU Utilization is %2.1f%%\n", time_total,
             (double)turnaround_total / (double)num_processes, 100 * (double)cpu_time_total / (double)time_total);
 
-    // Detailed Mode output
+    // Detailed Mode output (also printed in verbose mode)
     if (d_flag == true || v_flag == true) {
         for (i = 0; i < total_num_threads; i++) {
             // get service time and I/O time
