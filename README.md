@@ -1,6 +1,6 @@
-- Austin Van Braeckel - 1085829 - avanbrae@uoguelph.ca
+- Austin Van Braeckel
 - 2021-02-26
-- CIS*3110 - Operating Systems - Assignment 2
+- Operating Systems course Assignment
 - Submitted to: Professor Deborah Stacey
 
 # CPU Scheduling Simulator
